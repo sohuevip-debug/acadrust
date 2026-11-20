@@ -182,10 +182,6 @@ impl ArchEntityData {
     }
 }
 
-fn read_typed_handles(reader: &DwgMergedReader) -> Vec<(u64, u8)> {
-    read_typed_handles_with_completeness(reader).0
-}
-
 fn read_typed_handles_with_completeness(
     reader: &DwgMergedReader,
 ) -> (Vec<(u64, u8)>, bool) {

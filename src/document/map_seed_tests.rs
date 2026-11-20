@@ -143,3 +143,23 @@ fn a_cloned_map_keeps_its_seed_and_finds_its_keys() {
         assert_eq!(clone.get(key), map.get(key));
     }
 }
+
+#[test]
+fn raw_eed_accessors_expose_all_non_entity_records_in_source_order() {
+    let mut doc = CadDocument::new();
+    let owner = Handle::new(0x42);
+    let records = vec![
+        (0x10, vec![0x01, 0x02]),
+        (0x11, vec![0xA0, 0xB0, 0xC0]),
+    ];
+    doc.eed_by_handle.insert(owner, records.clone());
+
+    let by_handle = doc.raw_eed_for_handle(owner).unwrap();
+    assert_eq!(by_handle, records.as_slice());
+    assert!(doc.raw_eed_for_handle(Handle::new(0x43)).is_none());
+
+    let entries: Vec<_> = doc.raw_eed_entries().collect();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].0, owner);
+    assert_eq!(entries[0].1, records.as_slice());
+}

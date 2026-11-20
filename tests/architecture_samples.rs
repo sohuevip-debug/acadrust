@@ -17,6 +17,52 @@ fn shell_path() -> std::path::PathBuf {
 
 #[test]
 #[ignore = "requires the local ACAD Arch Sample Project 2027 masonry shell"]
+fn masonry_shell_reports_arch_text_and_typed_handle_streams() {
+    let doc = DwgReader::from_file(shell_path()).unwrap().read().unwrap();
+    let mut entity_count = 0usize;
+    let mut object_count = 0usize;
+    let mut entity_text_complete = 0usize;
+    let mut entity_handles_complete = 0usize;
+    let mut object_text_complete = 0usize;
+    let mut object_handles_complete = 0usize;
+    let mut total_references = 0usize;
+
+    for entity in doc.entities() {
+        let EntityType::Extended(entity) = entity else { continue };
+        let ExtendedEntityData::Arch(data) = &entity.data else { continue };
+        let decoded = data.decode();
+        entity_count += 1;
+        entity_text_complete += usize::from(decoded.text_stream_complete);
+        entity_handles_complete += usize::from(decoded.handle_stream_complete);
+        total_references += decoded.typed_handles.len();
+        assert_eq!(
+            decoded.handles,
+            decoded.typed_handles.iter().map(|(handle, _)| *handle).collect::<Vec<_>>()
+        );
+    }
+
+    for object in doc.objects.values() {
+        let ObjectType::Arch(object) = object else { continue };
+        let decoded = object.decode();
+        object_count += 1;
+        object_text_complete += usize::from(decoded.text_stream_complete);
+        object_handles_complete += usize::from(decoded.handle_stream_complete);
+        total_references += decoded.typed_handles.len();
+        assert_eq!(
+            decoded.handles,
+            decoded.typed_handles.iter().map(|(handle, _)| *handle).collect::<Vec<_>>()
+        );
+    }
+
+    assert!(entity_count > 0, "no Arch entities in sample");
+    assert!(object_count > 0, "no Arch objects in sample");
+    eprintln!(
+        "AEC envelope: entities={entity_count} text_complete={entity_text_complete} handles_complete={entity_handles_complete}; objects={object_count} text_complete={object_text_complete} handles_complete={object_handles_complete}; typed_references={total_references}"
+    );
+}
+
+#[test]
+#[ignore = "requires the local ACAD Arch Sample Project 2027 masonry shell"]
 fn masonry_shell_walls_round_trip_after_move() {
     let path = shell_path();
     let mut doc = DwgReader::from_file(&path).unwrap().read().unwrap();

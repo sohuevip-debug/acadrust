@@ -4293,6 +4293,32 @@ impl CadDocument {
         self.entities().count()
     }
 
+    /// Return the verbatim DWG EED payloads captured for one object handle.
+    ///
+    /// Each tuple contains the APPID table handle and the opaque EED payload
+    /// bytes, in source order. This is a read-only view: callers must not
+    /// reinterpret or rewrite the bytes unless they understand the source DWG
+    /// version's EED encoding. Returns None when no raw EED was captured for
+    /// this handle. Entity EED is also available on EntityCommon's extended
+    /// data raw_dwg_eed field.
+    pub fn raw_eed_for_handle(&self, handle: Handle) -> Option<&[(u64, Vec<u8>)]> {
+        self.eed_by_handle.get(&handle).map(Vec::as_slice)
+    }
+
+    /// Iterate over every non-entity/table-entry raw DWG EED payload captured
+    /// by the reader.
+    ///
+    /// The iterator yields each object handle and its ordered
+    /// (APPID handle, payload bytes) records. Entity EED is stored alongside
+    /// each entity and is intentionally not duplicated here.
+    pub fn raw_eed_entries(
+        &self,
+    ) -> impl Iterator<Item = (Handle, &[(u64, Vec<u8>)])> + '_ {
+        self.eed_by_handle
+            .iter()
+            .map(|(handle, records)| (*handle, records.as_slice()))
+    }
+
     /// Iterate over all drawing entities.
     ///
     /// Structural BLOCK/ENDBLK markers are stored in the backing vector (the

@@ -44,7 +44,16 @@ pub struct DecodedAec {
     /// Closed or open polylines from the entity's proxy graphics.
     pub profiles: Vec<Vec<Vector3>>,
     /// Handles stored in the class body, after the common DWG header.
+    /// Kept as a value-only compatibility view of typed_handles.
     pub handles: Vec<u64>,
+    /// Class-body references with their DWG reference kind:
+    /// 2 soft owner, 3 hard owner, 4 soft pointer, 5 hard pointer.
+    pub typed_handles: Vec<(u64, u8)>,
+    /// Whether the class text stream was consumed without a reader error.
+    pub text_stream_complete: bool,
+    /// Whether the entire class handle stream was consumed without a reader
+    /// error or hitting the defensive item limit.
+    pub handle_stream_complete: bool,
 }
 
 impl ArchEntityData {
@@ -91,12 +100,20 @@ fn identity(dxf_name: String, cpp_class_name: String, is_entity: bool) -> Decode
         placement: None,
         profiles: Vec::new(),
         handles: Vec::new(),
+        typed_handles: Vec::new(),
+        text_stream_complete: false,
+        handle_stream_complete: false,
     }
 }
 
 fn finish(decoded: &mut DecodedAec, mut reader: DwgMergedReader, entity: bool) {
-    decoded.strings = read_strings(&reader);
-    decoded.handles = read_handles(&reader);
+    let (strings, text_complete) = read_strings_with_completeness(&reader);
+    decoded.strings = strings;
+    decoded.text_stream_complete = text_complete;
+    let (typed_handles, handle_complete) = read_typed_handles_with_completeness(&reader);
+    decoded.handles = typed_handles.iter().map(|(handle, _)| *handle).collect();
+    decoded.typed_handles = typed_handles;
+    decoded.handle_stream_complete = handle_complete;
     if entity {
         let (schema, placement) = read_entity_tag(&mut reader);
         decoded.schema = schema;
@@ -132,7 +149,7 @@ fn open_object(object: &ArchObject) -> crate::error::Result<DwgMergedReader> {
     Ok(reader)
 }
 
-fn read_strings(reader: &DwgMergedReader) -> Vec<String> {
+fn read_strings_with_completeness(reader: &DwgMergedReader) -> (Vec<String>, bool) {
     let mut reader = reader.clone();
     let mut strings = Vec::new();
     while reader.text_remaining_bits() > 0 && strings.len() < 10_000 {
@@ -145,7 +162,8 @@ fn read_strings(reader: &DwgMergedReader) -> Vec<String> {
         }
         strings.push(text);
     }
-    strings
+    let complete = reader.text_remaining_bits() == 0 && reader.check_error().is_ok();
+    (strings, complete)
 }
 
 impl ArchObject {
@@ -197,20 +215,6 @@ fn read_typed_handles_with_completeness(
     }
     let complete = reader.handle_remaining_bits() == 0 && reader.check_error().is_ok();
     (handles, complete)
-}
-
-fn read_handles(reader: &DwgMergedReader) -> Vec<u64> {
-    let mut reader = reader.clone();
-    let mut handles = Vec::new();
-    while reader.handle_remaining_bits() >= 8 && handles.len() < 10_000 {
-        let remaining = reader.handle_remaining_bits();
-        let value = reader.read_handle();
-        if reader.check_error().is_err() || reader.handle_remaining_bits() >= remaining {
-            break;
-        }
-        handles.push(value);
-    }
-    handles
 }
 
 fn read_entity_tag(reader: &mut DwgMergedReader) -> (Option<i16>, Option<AecPlacement>) {
@@ -274,4 +278,25 @@ fn read_object_tag(reader: &mut DwgMergedReader) -> Option<i16> {
     let schema = reader.read_bit_short();
     reader.check_error().ok()?;
     Some(schema)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_arch_object_body_reports_incomplete_streams() {
+        let object = ArchObject::new(
+            "AEC_DISPLAY_THEME",
+            crate::types::Handle::new(1),
+            crate::types::Handle::new(0),
+        );
+        let decoded = object.decode();
+        assert!(decoded.typed_handles.is_empty());
+        assert!(decoded.handles.is_empty());
+        assert!(!decoded.text_stream_complete);
+        assert!(!decoded.handle_stream_complete);
+        assert_eq!(object.typed_handles_with_completeness(), (Vec::new(), false));
+    }
 }

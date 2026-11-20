@@ -54,6 +54,21 @@ impl AssociativeObject {
             || self.xdictionary_handle == Some(target)
             || self.data.references_handle(target)
     }
+
+    /// Return every decoded handle in the associative payload, excluding the
+    /// object's owner, reactors, extension dictionary, and intrinsic handle.
+    /// This preserves duplicate references because each serialized slot is
+    /// independently meaningful to an integrity audit.
+    pub fn payload_referenced_handles(&self) -> Vec<Handle> {
+        let mut data = self.data.clone();
+        let mut handles = Vec::new();
+        data.visit_handles_mut(&mut |handle| {
+            if !handle.is_null() {
+                handles.push(*handle);
+            }
+        });
+        handles
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]

@@ -152,18 +152,43 @@ impl ArchObject {
     /// Class-body references with their reference kind (2 soft owner,
     /// 3 hard owner, 4 soft pointer, 5 hard pointer), in stream order.
     pub fn typed_handles(&self) -> Vec<(u64, u8)> {
-        open_object(self).map(|r| read_typed_handles(&r)).unwrap_or_default()
+        self.typed_handles_with_completeness().0
+    }
+
+    /// Return decoded class-body references and whether the entire handle
+    /// stream was consumed without a reader error. A false completeness flag
+    /// means the returned references are only the successfully decoded prefix.
+    pub fn typed_handles_with_completeness(&self) -> (Vec<(u64, u8)>, bool) {
+        match open_object(self) {
+            Ok(reader) => read_typed_handles_with_completeness(&reader),
+            Err(_) => (Vec::new(), false),
+        }
     }
 }
 
 impl ArchEntityData {
     /// Class-body references with their reference kind, in stream order.
     pub fn typed_handles(&self) -> Vec<(u64, u8)> {
-        open_entity(self).map(|r| read_typed_handles(&r)).unwrap_or_default()
+        self.typed_handles_with_completeness().0
+    }
+
+    /// Return decoded class-body references and whether the entire handle
+    /// stream was consumed without a reader error.
+    pub fn typed_handles_with_completeness(&self) -> (Vec<(u64, u8)>, bool) {
+        match open_entity(self) {
+            Ok(reader) => read_typed_handles_with_completeness(&reader),
+            Err(_) => (Vec::new(), false),
+        }
     }
 }
 
 fn read_typed_handles(reader: &DwgMergedReader) -> Vec<(u64, u8)> {
+    read_typed_handles_with_completeness(reader).0
+}
+
+fn read_typed_handles_with_completeness(
+    reader: &DwgMergedReader,
+) -> (Vec<(u64, u8)>, bool) {
     let mut reader = reader.clone();
     let mut handles = Vec::new();
     while reader.handle_remaining_bits() >= 8 && handles.len() < 10_000 {
@@ -174,7 +199,8 @@ fn read_typed_handles(reader: &DwgMergedReader) -> Vec<(u64, u8)> {
         }
         handles.push((value, kind.code()));
     }
-    handles
+    let complete = reader.handle_remaining_bits() == 0 && reader.check_error().is_ok();
+    (handles, complete)
 }
 
 fn read_handles(reader: &DwgMergedReader) -> Vec<u64> {

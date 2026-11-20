@@ -23,6 +23,14 @@ an apparently successful export that silently loses Arch geometry.
 `ArchObject::new` provides class identity only; a native body is required to
 write that object to DWG.
 
+## Class-independent envelope audit
+
+`ArchEntityData::decode()` and `ArchObject::decode()` expose the shared AEC envelope without requiring a per-class schema. `DecodedAec` includes ordered `strings`, value-only `handles` for compatibility, and `typed_handles` as `(absolute_handle, reference_kind_code)` pairs. Reference kind codes are 2 (soft owner), 3 (hard owner), 4 (soft pointer), and 5 (hard pointer).
+
+Use `text_stream_complete` and `handle_stream_complete` before treating either inventory as exhaustive. A missing or malformed native body, a reader error, or the defensive 10,000-item limit leaves the corresponding flag false. These flags describe consumption of the shared text/handle streams only; they do not mean that every class-specific field or vendor-private semantic relationship has been decoded.
+
+`ArchEntityData::typed_handles_with_completeness()` and `ArchObject::typed_handles_with_completeness()` provide the typed reference list and handle-stream completeness directly when the full envelope is not needed.
+
 ## Creation
 
 `wall(start, end, width, height, layer)`, `door(width, height, layer)`, and

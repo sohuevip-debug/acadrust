@@ -4450,6 +4450,23 @@ impl CadDocument {
         self.object_xdata.get(&handle)
     }
 
+    /// Return the verbatim DWG EED records attached to an object handle.
+    ///
+    /// Each entry is (APPID handle, raw EED bytes). The bytes are kept
+    /// verbatim by the DWG reader and are exposed read-only so callers can
+    /// audit data that has not been decoded into structured XDATA.
+    pub fn raw_eed_for_handle(&self, handle: Handle) -> Option<&[(u64, Vec<u8>)]> {
+        self.eed_by_handle.get(&handle).map(Vec::as_slice)
+    }
+
+    /// Iterate over every owner handle carrying verbatim DWG EED, including
+    /// non-entity objects and table records.
+    pub fn raw_eed_entries(&self) -> impl Iterator<Item = (Handle, &[(u64, Vec<u8>)])> + '_ {
+        self.eed_by_handle
+            .iter()
+            .map(|(handle, records)| (*handle, records.as_slice()))
+    }
+
     /// Store `record` as object `handle`'s XDATA for its application. An
     /// earlier record and any verbatim DWG EED of that application go, so the
     /// new values are the ones written.

@@ -41,6 +41,20 @@ impl ClassObject {
         }
         self.data.visit_handles_mut(visit);
     }
+
+    /// Return decoded handles stored inside the semantic class payload,
+    /// excluding the object's common owner/reactor/extension-dictionary fields.
+    /// The clone keeps this inspection API read-only for the resident drawing.
+    pub fn payload_referenced_handles(&self) -> Vec<Handle> {
+        let mut data = self.data.clone();
+        let mut handles = Vec::new();
+        data.visit_handles_mut(&mut |handle| {
+            if !handle.is_null() {
+                handles.push(*handle);
+            }
+        });
+        handles
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
